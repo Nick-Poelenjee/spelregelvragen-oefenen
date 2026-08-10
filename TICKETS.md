@@ -77,6 +77,23 @@ Simpel gehouden: statische web-app (HTML/CSS/JS, geen build-stap), vragen in é�
 
 ---
 
+## T7 — Uitgebreide statistieken
+
+**Waarom:** één regel "x van y goed" zegt te weinig om gericht te oefenen.
+
+**Wat:**
+- Eigen statistiekenscherm, bereikbaar vanaf het startscherm en het resultaatscherm.
+- Kerncijfers: aantal antwoorden (goed/fout), percentage goed, hoeveel van de 300
+  vragen je hebt gezien, en de langste reeks goede antwoorden.
+- Per onderwerp: percentage goed met balkje, zwakste onderwerp bovenaan, klikbaar om
+  meteen op dat onderwerp te oefenen. Ingeklapt tot 12 rijen.
+- "Vaakst fout": top 10 vragen, uitklapbaar met de volledige vraag en het juiste antwoord.
+- "Laatste rondes": datum, onderwerp en score van de laatste 10 rondes (50 bewaard).
+- Oude, platte statistieken (`{id: {good, bad}}`) worden bij het laden omgezet.
+
+**Klaar als:** je na een paar rondes ziet op welk onderwerp je het slechtst scoort en
+daar in één klik op kunt oefenen.
+
 ## Buiten scope (voor nu)
 
 - Accounts / inloggen, meerdere gebruikers.

@@ -56,7 +56,9 @@
     <div class="card stats" id="stats-card" hidden>
       <h2>Jouw statistieken</h2>
       <p id="stats-summary"></p>
-      <button type="button" class="link" id="btn-clear-stats">Statistieken wissen</button>
+      <div class="actions">
+        <button type="button" id="btn-stats">Bekijk statistieken</button>
+      </div>
     </div>
   </section>
 
@@ -87,10 +89,20 @@
       <div class="actions">
         <button type="button" class="primary" id="btn-again">Opnieuw oefenen</button>
         <button type="button" id="btn-retry-wrong" hidden>Alleen fouten opnieuw</button>
+        <button type="button" id="btn-result-stats">Statistieken</button>
         <button type="button" class="link" id="btn-home">Terug naar start</button>
       </div>
     </div>
     <div id="review"></div>
+  </section>
+
+  <!-- Statistiekenscherm -->
+  <section id="screen-stats" hidden>
+    <div id="stats-body"></div>
+    <div class="actions">
+      <button type="button" class="primary" id="btn-stats-back">Terug naar start</button>
+      <button type="button" class="link" id="btn-clear-stats">Statistieken wissen</button>
+    </div>
   </section>
 
   <p id="loading">Vragen laden…</p>

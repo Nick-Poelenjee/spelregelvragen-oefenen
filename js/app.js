@@ -4,23 +4,33 @@ const LETTERS = ["a", "b", "c", "d"];
 const SETTINGS_KEY = "spelregels.settings";
 const STATS_KEY = "spelregels.stats";
 const DEFAULT_SETTINGS = { amount: 10, topic: "", focusMistakes: false };
+const MAX_ROUNDS = 50; // bewaarde rondes in de geschiedenis
 
 const $ = (id) => document.getElementById(id);
 
 let allQuestions = [];
+let questionById = new Map();
 let settings = { ...DEFAULT_SETTINGS };
-let stats = {}; // { [vraagId]: { good: n, bad: n } }
+let stats = emptyStats();
 
-let round = null; // { questions, index, answers: {id: letter} }
+let round = null; // { questions, index, answers: {id: letter}, recorded }
 
 /* ---------- opslag ---------- */
 
-function load(key, fallback) {
+function emptyStats() {
+  return {
+    questions: {}, // { [vraagId]: { good, bad, last } }
+    rounds: [], // [{ at, total, good, topic }]
+    streak: { current: 0, best: 0 },
+  };
+}
+
+function readJSON(key) {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? { ...fallback, ...JSON.parse(raw) } : { ...fallback };
+    return raw ? JSON.parse(raw) : null;
   } catch {
-    return { ...fallback };
+    return null;
   }
 }
 
@@ -32,17 +42,91 @@ function save(key, value) {
   }
 }
 
+function loadSettings() {
+  return { ...DEFAULT_SETTINGS, ...(readJSON(SETTINGS_KEY) || {}) };
+}
+
+function loadStats() {
+  const raw = readJSON(STATS_KEY);
+  if (!raw) return emptyStats();
+  // Oud formaat was een platte map van vraag-id naar { good, bad }.
+  const questions = raw.questions || raw;
+  return {
+    ...emptyStats(),
+    ...(raw.questions ? raw : {}),
+    questions: typeof questions === "object" && questions ? questions : {},
+  };
+}
+
 function recordAnswer(question, correct) {
-  const entry = stats[question.id] || { good: 0, bad: 0 };
+  const entry = stats.questions[question.id] || { good: 0, bad: 0 };
   entry[correct ? "good" : "bad"] += 1;
-  stats[question.id] = entry;
+  entry.last = Date.now();
+  stats.questions[question.id] = entry;
+
+  const streak = stats.streak;
+  streak.current = correct ? streak.current + 1 : 0;
+  streak.best = Math.max(streak.best, streak.current);
+
   save(STATS_KEY, stats);
+}
+
+function recordRound() {
+  const answered = answeredQuestions();
+  if (round.recorded || answered.length === 0) return;
+  round.recorded = true;
+  stats.rounds.unshift({
+    at: Date.now(),
+    total: answered.length,
+    good: countGood(),
+    topic: settings.topic,
+  });
+  stats.rounds = stats.rounds.slice(0, MAX_ROUNDS);
+  save(STATS_KEY, stats);
+}
+
+/* ---------- kleine helpers ---------- */
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function percent(good, total) {
+  return total === 0 ? 0 : Math.round((good / total) * 100);
+}
+
+function bar(pct, tone) {
+  const wrap = el("div", "bar");
+  const fill = el("div", tone ? `fill ${tone}` : "fill");
+  fill.style.width = `${pct}%`;
+  wrap.append(fill);
+  return wrap;
+}
+
+function toneFor(pct) {
+  return pct >= 80 ? "ok" : pct >= 50 ? "meh" : "low";
+}
+
+function plural(count, one, many) {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+function formatDate(ms) {
+  return new Date(ms).toLocaleString("nl-NL", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 /* ---------- schermen ---------- */
 
 function showScreen(name) {
-  for (const id of ["start", "quiz", "result"]) {
+  for (const id of ["start", "quiz", "result", "stats"]) {
     $(`screen-${id}`).hidden = id !== name;
   }
   window.scrollTo(0, 0);
@@ -74,6 +158,19 @@ function poolFor(topic) {
   return topic ? allQuestions.filter((q) => q.tags.includes(topic)) : allQuestions;
 }
 
+function roundSize(poolSize) {
+  if (settings.amount === "all") return poolSize;
+  return Math.min(Math.max(1, Number(settings.amount) || 10), poolSize);
+}
+
+function renderPoolInfo() {
+  const pool = poolFor(settings.topic);
+  const asked = roundSize(pool.length);
+  $("pool-info").textContent =
+    `${plural(asked, "vraag", "vragen")} uit ${pool.length} beschikbare ` +
+    (settings.topic ? `vragen over #${settings.topic}.` : "vragen.");
+}
+
 function syncAmountUI() {
   const chips = [...document.querySelectorAll("#amount-chips .chip")];
   const match = chips.find((c) => c.dataset.amount === String(settings.amount));
@@ -85,40 +182,230 @@ function renderStart() {
   syncAmountUI();
   $("topic").value = settings.topic;
   $("focus-mistakes").checked = settings.focusMistakes;
-
-  const pool = poolFor(settings.topic);
-  const asked = roundSize(pool.length);
-  $("pool-info").textContent =
-    `${asked} ${asked === 1 ? "vraag" : "vragen"} uit ${pool.length} beschikbare ` +
-    (settings.topic ? `vragen over #${settings.topic}.` : "vragen.");
-  $("btn-start").disabled = pool.length === 0;
-
-  renderStats();
+  renderPoolInfo();
+  $("btn-start").disabled = poolFor(settings.topic).length === 0;
+  renderSummary();
   showScreen("start");
 }
 
-function roundSize(poolSize) {
-  if (settings.amount === "all") return poolSize;
-  return Math.min(Math.max(1, Number(settings.amount) || 10), poolSize);
+function renderSummary() {
+  const totals = overallTotals();
+  const card = $("stats-card");
+  card.hidden = totals.answered === 0;
+  if (totals.answered === 0) return;
+  $("stats-summary").textContent =
+    `${plural(totals.answered, "antwoord", "antwoorden")} gegeven, ` +
+    `${totals.good} goed (${percent(totals.good, totals.answered)}%). ` +
+    `${totals.seen} van de ${allQuestions.length} vragen gezien.`;
 }
 
-function renderStats() {
-  const entries = Object.entries(stats);
-  const card = $("stats-card");
-  if (entries.length === 0) {
-    card.hidden = true;
+/* ---------- statistieken berekenen ---------- */
+
+function overallTotals() {
+  const entries = Object.values(stats.questions);
+  const good = entries.reduce((sum, s) => sum + s.good, 0);
+  const bad = entries.reduce((sum, s) => sum + s.bad, 0);
+  return { good, bad, answered: good + bad, seen: entries.length };
+}
+
+function topicTotals() {
+  const totals = new Map();
+  for (const [id, s] of Object.entries(stats.questions)) {
+    const question = questionById.get(Number(id));
+    if (!question) continue;
+    for (const tag of question.tags) {
+      const entry = totals.get(tag) || { good: 0, bad: 0, seen: 0 };
+      entry.good += s.good;
+      entry.bad += s.bad;
+      entry.seen += 1;
+      totals.set(tag, entry);
+    }
+  }
+  return [...totals.entries()]
+    .map(([tag, e]) => ({ tag, ...e, answered: e.good + e.bad }))
+    .filter((row) => row.answered > 0)
+    .sort((a, b) => {
+      const diff = percent(a.good, a.answered) - percent(b.good, b.answered);
+      return diff !== 0 ? diff : b.answered - a.answered;
+    });
+}
+
+function mostMissed(limit) {
+  return Object.entries(stats.questions)
+    .filter(([, s]) => s.bad > 0)
+    .map(([id, s]) => ({ question: questionById.get(Number(id)), ...s }))
+    .filter((row) => row.question)
+    .sort((a, b) => b.bad - a.bad || a.good - b.good)
+    .slice(0, limit);
+}
+
+/* ---------- statistiekenscherm ---------- */
+
+function renderStatsScreen() {
+  const totals = overallTotals();
+  const body = $("stats-body");
+  body.replaceChildren();
+
+  if (totals.answered === 0) {
+    body.append(el("p", "empty", "Nog geen antwoorden gegeven. Start een ronde en kom terug."));
+    showScreen("stats");
     return;
   }
-  const good = entries.reduce((sum, [, s]) => sum + s.good, 0);
-  const bad = entries.reduce((sum, [, s]) => sum + s.bad, 0);
-  const total = good + bad;
-  const pct = Math.round((good / total) * 100);
-  const wrong = entries.filter(([, s]) => s.bad > 0).length;
-  card.hidden = false;
-  $("stats-summary").textContent =
-    `${total} ${total === 1 ? "vraag" : "vragen"} beantwoord, ${good} goed (${pct}%). ` +
-    `${entries.length} van de ${allQuestions.length} vragen gezien, ` +
-    `${wrong} daarvan minstens één keer fout.`;
+
+  body.append(
+    tilesSection(totals),
+    topicsSection(),
+    missedSection(),
+    roundsSection(),
+  );
+  showScreen("stats");
+}
+
+function tile(label, value, sub, extra) {
+  const node = el("div", "tile");
+  node.append(el("p", "tile-label", label), el("p", "tile-value", value));
+  if (sub) node.append(el("p", "tile-sub", sub));
+  if (extra) node.append(extra);
+  return node;
+}
+
+function tilesSection(totals) {
+  const section = el("section", "card");
+  section.append(el("h2", null, "Kerncijfers"));
+
+  const pct = percent(totals.good, totals.answered);
+  const seenPct = percent(totals.seen, allQuestions.length);
+  const grid = el("div", "tiles");
+  grid.append(
+    tile("Antwoorden", String(totals.answered), `${totals.good} goed, ${totals.bad} fout`),
+    tile("Percentage goed", `${pct}%`, null, bar(pct, toneFor(pct))),
+    tile(
+      "Vragen gezien",
+      `${totals.seen} / ${allQuestions.length}`,
+      `${seenPct}% van de database`,
+      bar(seenPct),
+    ),
+    tile(
+      "Beste reeks",
+      plural(stats.streak.best, "goed", "goed"),
+      `nu ${stats.streak.current} achter elkaar`,
+    ),
+  );
+  section.append(grid);
+  return section;
+}
+
+const TOPICS_COLLAPSED = 12;
+let topicsExpanded = false;
+
+function topicsSection() {
+  const section = el("section", "card");
+  section.append(el("h2", null, "Per onderwerp"));
+  const all = topicTotals();
+  const rows = topicsExpanded ? all : all.slice(0, TOPICS_COLLAPSED);
+  section.append(
+    el("p", "hint", "Zwakste onderwerp bovenaan. Klik op een onderwerp om er direct op te oefenen."),
+  );
+
+  const list = el("ul", "stat-list");
+  for (const row of rows) {
+    const pct = percent(row.good, row.answered);
+    const item = el("li", "stat-row");
+
+    const button = el("button", "stat-main");
+    button.type = "button";
+    button.append(
+      el("span", "stat-name", `#${row.tag}`),
+      el("span", "stat-numbers", `${row.good}/${row.answered} goed · ${pct}%`),
+      bar(pct, toneFor(pct)),
+    );
+    button.addEventListener("click", () => practiceTopic(row.tag));
+
+    item.append(button);
+    list.append(item);
+  }
+  section.append(list);
+
+  if (all.length > TOPICS_COLLAPSED) {
+    const toggle = el(
+      "button",
+      "link",
+      topicsExpanded
+        ? "Toon minder onderwerpen"
+        : `Toon alle ${all.length} onderwerpen`,
+    );
+    toggle.type = "button";
+    toggle.addEventListener("click", () => {
+      topicsExpanded = !topicsExpanded;
+      renderStatsScreen();
+    });
+    section.append(toggle);
+  }
+  return section;
+}
+
+function missedSection() {
+  const rows = mostMissed(10);
+  const section = el("section", "card");
+  section.append(el("h2", null, "Vaakst fout"));
+  if (rows.length === 0) {
+    section.append(el("p", "hint", "Nog geen enkele vraag fout beantwoord."));
+    return section;
+  }
+
+  const list = el("ul", "missed-list");
+  for (const row of rows) {
+    const q = row.question;
+    const item = el("li", "missed");
+    const details = document.createElement("details");
+
+    const summary = document.createElement("summary");
+    summary.append(
+      el("span", "missed-head", `Vraag ${q.id} — ${row.bad}× fout, ${row.good}× goed`),
+      el("span", "missed-preview", q.question),
+    );
+
+    details.append(
+      summary,
+      el("p", "missed-text", q.question),
+      el("p", "missed-answer", `Juist: ${q.answer}. ${q.options[q.answer]}`),
+    );
+    item.append(details);
+    list.append(item);
+  }
+  section.append(list);
+  return section;
+}
+
+function roundsSection() {
+  const section = el("section", "card");
+  section.append(el("h2", null, "Laatste rondes"));
+  const rounds = stats.rounds.slice(0, 10);
+  if (rounds.length === 0) {
+    section.append(el("p", "hint", "Nog geen afgeronde ronde."));
+    return section;
+  }
+
+  const list = el("ul", "round-list");
+  for (const item of rounds) {
+    const pct = percent(item.good, item.total);
+    const row = el("li", "round");
+    row.append(
+      el("span", "round-date", formatDate(item.at)),
+      el("span", "round-topic", item.topic ? `#${item.topic}` : "alle onderwerpen"),
+      el("span", `round-score ${toneFor(pct)}`, `${item.good}/${item.total} · ${pct}%`),
+    );
+    list.append(row);
+  }
+  section.append(list);
+  return section;
+}
+
+function practiceTopic(tag) {
+  settings.topic = tag;
+  save(SETTINGS_KEY, settings);
+  $("topic").value = tag;
+  startRound(pickQuestions());
 }
 
 /* ---------- ronde starten ---------- */
@@ -137,11 +424,11 @@ function pickQuestions() {
   const size = roundSize(pool.length);
   if (!settings.focusMistakes) return shuffle(pool).slice(0, size);
 
-  // Eerst vragen die vaker fout dan goed gingen, daarna de rest.
+  // Eerst vragen die eerder fout gingen, dan ongeziene, dan de rest.
   const score = (q) => {
-    const s = stats[q.id];
-    if (!s) return 1; // nog niet gezien
-    return s.bad > 0 ? 0 : 2; // ooit fout eerst, daarna al goed beantwoord
+    const s = stats.questions[q.id];
+    if (!s) return 1;
+    return s.bad > 0 ? 0 : 2;
   };
   const buckets = [[], [], []];
   for (const q of shuffle(pool)) buckets[score(q)].push(q);
@@ -149,7 +436,7 @@ function pickQuestions() {
 }
 
 function startRound(questions) {
-  round = { questions, index: 0, answers: {} };
+  round = { questions, index: 0, answers: {}, recorded: false };
   renderQuestion();
   showScreen("quiz");
 }
@@ -179,14 +466,7 @@ function renderQuestion() {
     const button = document.createElement("button");
     button.type = "button";
     button.dataset.letter = letter;
-
-    const tag = document.createElement("span");
-    tag.className = "letter";
-    tag.textContent = `${letter}.`;
-    const text = document.createElement("span");
-    text.textContent = q.options[letter];
-
-    button.append(tag, text);
+    button.append(el("span", "letter", `${letter}.`), el("span", null, q.options[letter]));
     button.addEventListener("click", () => answer(letter));
     item.append(button);
     list.append(item);
@@ -250,9 +530,11 @@ function countBad() {
 /* ---------- resultaatscherm ---------- */
 
 function renderResult() {
+  recordRound();
+
   const total = round.questions.length;
   const good = countGood();
-  const pct = Math.round((good / total) * 100);
+  const pct = percent(good, total);
 
   $("result-score").textContent = `${good} van de ${total} goed (${pct}%)`;
   $("result-message").textContent =
@@ -267,33 +549,16 @@ function renderResult() {
   const review = $("review");
   review.replaceChildren();
   for (const q of wrong) {
-    const card = document.createElement("div");
-    card.className = "card review-item";
-
-    const tags = document.createElement("p");
-    tags.className = "tags";
-    tags.textContent = q.tags.map((t) => `#${t}`).join(" ");
-
-    const text = document.createElement("p");
-    text.className = "question";
-    text.textContent = `${q.id}. ${q.question}`;
-
-    const givenLabel = document.createElement("p");
-    givenLabel.className = "label";
-    givenLabel.textContent = "Jouw antwoord";
-    const given = document.createElement("p");
-    given.className = "given";
+    const card = el("div", "card review-item");
     const chosen = round.answers[q.id];
-    given.textContent = chosen ? `${chosen}. ${q.options[chosen]}` : "geen antwoord";
-
-    const correctLabel = document.createElement("p");
-    correctLabel.className = "label";
-    correctLabel.textContent = "Juiste antwoord";
-    const correct = document.createElement("p");
-    correct.className = "correct-answer";
-    correct.textContent = `${q.answer}. ${q.options[q.answer]}`;
-
-    card.append(tags, text, givenLabel, given, correctLabel, correct);
+    card.append(
+      el("p", "tags", q.tags.map((t) => `#${t}`).join(" ")),
+      el("p", "question", `${q.id}. ${q.question}`),
+      el("p", "label", "Jouw antwoord"),
+      el("p", "given", chosen ? `${chosen}. ${q.options[chosen]}` : "geen antwoord"),
+      el("p", "label", "Juiste antwoord"),
+      el("p", "correct-answer", `${q.answer}. ${q.options[q.answer]}`),
+    );
     review.append(card);
   }
 
@@ -350,9 +615,13 @@ function bindEvents() {
   });
   $("btn-home").addEventListener("click", renderStart);
 
+  $("btn-stats").addEventListener("click", renderStatsScreen);
+  $("btn-result-stats").addEventListener("click", renderStatsScreen);
+  $("btn-stats-back").addEventListener("click", renderStart);
+
   $("btn-clear-stats").addEventListener("click", () => {
     if (!confirm("Alle statistieken wissen?")) return;
-    stats = {};
+    stats = emptyStats();
     save(STATS_KEY, stats);
     renderStart();
   });
@@ -374,14 +643,6 @@ function bindEvents() {
   });
 }
 
-function renderPoolInfo() {
-  const pool = poolFor(settings.topic);
-  const asked = roundSize(pool.length);
-  $("pool-info").textContent =
-    `${asked} ${asked === 1 ? "vraag" : "vragen"} uit ${pool.length} beschikbare ` +
-    (settings.topic ? `vragen over #${settings.topic}.` : "vragen.");
-}
-
 /* ---------- opstarten ---------- */
 
 async function init() {
@@ -390,15 +651,16 @@ async function init() {
     if (!response.ok) throw new Error(response.statusText);
     const data = await response.json();
     allQuestions = data.questions;
-  } catch (error) {
+    questionById = new Map(allQuestions.map((q) => [q.id, q]));
+  } catch {
     $("loading").textContent =
       "De vragen konden niet geladen worden. Open de pagina via een webserver " +
       "(bijvoorbeeld: python3 -m http.server) in plaats van rechtstreeks vanaf schijf.";
     return;
   }
 
-  settings = load(SETTINGS_KEY, DEFAULT_SETTINGS);
-  stats = load(STATS_KEY, {});
+  settings = loadSettings();
+  stats = loadStats();
 
   $("loading").hidden = true;
   $("amount-custom").max = allQuestions.length;

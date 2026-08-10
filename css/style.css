@@ -187,4 +187,83 @@ button.link {
 .review-item .given { color: var(--bad); margin: 0; }
 .review-item .correct-answer { color: var(--good); margin: 0; }
 
+/* Statistieken */
+.hint { color: var(--muted); font-size: 0.85rem; margin: -0.4rem 0 0.9rem; }
+.empty { color: var(--muted); }
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: 0.75rem;
+}
+
+.tile {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+}
+.tile-label { margin: 0; font-size: 0.8rem; color: var(--muted); }
+.tile-value { margin: 0.15rem 0 0; font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+.tile-sub { margin: 0.15rem 0 0; font-size: 0.8rem; color: var(--muted); }
+.tile .bar { margin-top: 0.5rem; }
+
+.bar {
+  height: 6px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.bar .fill { height: 100%; background: var(--accent); }
+.bar .fill.ok { background: var(--good); }
+.bar .fill.meh { background: #c8901f; }
+.bar .fill.low { background: var(--bad); }
+
+.stat-list, .missed-list, .round-list { list-style: none; margin: 0; padding: 0; }
+
+.stat-row + .stat-row { margin-top: 0.4rem; }
+.stat-main {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.2rem 0.75rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+}
+.stat-main .bar { grid-column: 1 / -1; margin-top: 0.25rem; }
+.stat-name { font-weight: 600; }
+.stat-numbers { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+
+.missed + .missed { border-top: 1px solid var(--line); margin-top: 0.6rem; padding-top: 0.6rem; }
+.missed summary { cursor: pointer; }
+.missed summary::marker { color: var(--muted); }
+.missed-head { font-size: 0.8rem; color: var(--bad); font-weight: 600; }
+.missed-preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.missed[open] .missed-preview, .missed details[open] .missed-preview { display: none; }
+.missed-text { margin: 0.4rem 0 0.2rem; }
+.missed-answer { margin: 0; color: var(--good); font-size: 0.9rem; }
+
+.round {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+  padding: 0.45rem 0;
+  font-size: 0.9rem;
+}
+.round + .round { border-top: 1px solid var(--line); }
+.round-date { color: var(--muted); min-width: 8.5rem; }
+.round-topic { color: var(--muted); flex: 1; }
+.round-score { font-weight: 700; }
+.round-score.ok { color: var(--good); }
+.round-score.meh { color: #b07d12; }
+.round-score.low { color: var(--bad); }
+
 #loading { color: var(--muted); }

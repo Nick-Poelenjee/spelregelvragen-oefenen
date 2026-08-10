@@ -20,7 +20,10 @@ op GitHub Pages gehost worden.
 - Direct feedback per vraag; aan het eind je score plus alle fout beantwoorde vragen
   met jouw antwoord naast het juiste antwoord.
 - "Alleen fouten opnieuw" en "Focus op vragen die ik eerder fout had".
-- Score-historie in `localStorage`; te wissen vanaf het startscherm.
+- Statistiekenscherm: kerncijfers (antwoorden, percentage goed, hoeveel van de 300
+  vragen gezien, langste reeks goed), score per onderwerp met de zwakste bovenaan en
+  in één klik te oefenen, de tien vaakst foute vragen en je laatste rondes.
+- Score-historie in `localStorage`; te wissen vanaf het statistiekenscherm.
 - Toetsenbord: `a`–`d` of `1`–`4` om te antwoorden, `Enter` voor de volgende vraag.
 
 ## Vragen bijwerken
