@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spelregelvragen oefenen</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>⚽</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <h1>⚽ Spelregelvragen oefenen</h1>
+  <p class="subtitle">KNVB spelregelvragen veldvoetbal, seizoen 2026-2027</p>
+</header>
+
+<main>
+  <!-- Startscherm -->
+  <section id="screen-start" hidden>
+    <div class="card">
+      <h2>Nieuwe oefenronde</h2>
+
+      <fieldset>
+        <legend>Aantal vragen</legend>
+        <div class="chips" id="amount-chips">
+          <button type="button" class="chip" data-amount="5">5</button>
+          <button type="button" class="chip" data-amount="10">10</button>
+          <button type="button" class="chip" data-amount="20">20</button>
+          <button type="button" class="chip" data-amount="50">50</button>
+          <button type="button" class="chip" data-amount="all">Alles</button>
+        </div>
+        <label class="inline">
+          Of eigen aantal:
+          <input type="number" id="amount-custom" min="1" max="300" inputmode="numeric">
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>Onderwerp</legend>
+        <select id="topic">
+          <option value="">Alle onderwerpen</option>
+        </select>
+      </fieldset>
+
+      <fieldset>
+        <legend>Opties</legend>
+        <label class="inline">
+          <input type="checkbox" id="focus-mistakes">
+          Focus op vragen die ik eerder fout had
+        </label>
+      </fieldset>
+
+      <p class="pool" id="pool-info"></p>
+      <button type="button" class="primary" id="btn-start">Start oefenen</button>
+    </div>
+
+    <div class="card stats" id="stats-card" hidden>
+      <h2>Jouw statistieken</h2>
+      <p id="stats-summary"></p>
+      <div class="actions">
+        <button type="button" id="btn-stats">Bekijk statistieken</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Oefenscherm -->
+  <section id="screen-quiz" hidden>
+    <div class="progress">
+      <span id="progress-text"></span>
+      <span class="score"><span class="good" id="count-good">0</span> / <span class="bad" id="count-bad">0</span></span>
+    </div>
+    <div class="progress-bar"><div id="progress-fill"></div></div>
+
+    <div class="card">
+      <p class="tags" id="question-tags"></p>
+      <p class="question" id="question-text"></p>
+      <ul class="options" id="options"></ul>
+      <p class="feedback" id="feedback" hidden></p>
+      <button type="button" class="primary" id="btn-next" hidden>Volgende</button>
+    </div>
+    <button type="button" class="link" id="btn-quit">Stoppen</button>
+  </section>
+
+  <!-- Resultaatscherm -->
+  <section id="screen-result" hidden>
+    <div class="card">
+      <h2>Resultaat</h2>
+      <p class="result-score" id="result-score"></p>
+      <p id="result-message"></p>
+      <div class="actions">
+        <button type="button" class="primary" id="btn-again">Opnieuw oefenen</button>
+        <button type="button" id="btn-retry-wrong" hidden>Alleen fouten opnieuw</button>
+        <button type="button" id="btn-result-stats">Statistieken</button>
+        <button type="button" class="link" id="btn-home">Terug naar start</button>
+      </div>
+    </div>
+    <div id="review"></div>
+  </section>
+
+  <!-- Statistiekenscherm -->
+  <section id="screen-stats" hidden>
+    <div id="stats-body"></div>
+    <div class="actions">
+      <button type="button" class="primary" id="btn-stats-back">Terug naar start</button>
+      <button type="button" class="link" id="btn-clear-stats">Statistieken wissen</button>
+    </div>
+  </section>
+
+  <p id="loading">Vragen laden…</p>
+</main>
+
+<footer>
+  <p>Bron: KNVB Adviesgroep Spelregels. Oefenen doe je lokaal; er wordt niets verstuurd.</p>
+</footer>
+
+<script src="js/app.js"></script>
+</body>
+</html>
