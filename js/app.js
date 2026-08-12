@@ -1,4 +1,8 @@
-/* Oefentool spelregelvragen — alles draait lokaal in de browser. */
+/* Oefentool spelregelvragen.
+ *
+ * De voortgang staat in de database achter /api/state. Lukt dat niet — geen
+ * netwerk, of de pagina draait zonder API — dan valt de app terug op
+ * localStorage, zodat je altijd kunt blijven oefenen. */
 
 const LETTERS = ["a", "b", "c", "d"];
 const SETTINGS_KEY = "spelregels.settings";
@@ -9,12 +13,16 @@ const MASTERY_STREAK = 4; // zo vaak op rij goed = beheerst (buiten de foutenfoc
 const RETIRE_STREAK = 8; // zo vaak op rij goed = afgerond (komt niet meer terug)
 const FIRST_TIME_STREAK = 6; // startstand als een vraag meteen de eerste keer goed gaat
 
+const API = "/api/state";
+const IMPORTED_KEY = "spelregels.geimporteerd";
+
 const $ = (id) => document.getElementById(id);
 
 let allQuestions = [];
 let questionById = new Map();
 let settings = { ...DEFAULT_SETTINGS };
 let stats = emptyStats();
+let online = true; // false zodra de API niet bereikbaar blijkt
 
 let round = null; // { questions, index, answers: {id: letter}, recorded }
 
@@ -61,11 +69,61 @@ function loadStats() {
   };
 }
 
+/* ---------- server ---------- */
+
+async function api(body) {
+  const response = await fetch(
+    API,
+    body
+      ? {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      : {},
+  );
+  if (!response.ok) throw new Error(`${response.status}`);
+  return response.json();
+}
+
+/** Vanaf hier bewaren we lokaal, zodat er niets verloren gaat. */
+function goOffline() {
+  if (!online) return;
+  online = false;
+  $("offline").hidden = false;
+  save(STATS_KEY, stats);
+  save(SETTINGS_KEY, settings);
+}
+
+/** Stuurt een wijziging naar de server en verwerkt het antwoord. Mislukt dat,
+ *  dan schakelt de app over op lokale opslag. */
+async function send(body, apply) {
+  if (!online) {
+    save(STATS_KEY, stats);
+    save(SETTINGS_KEY, settings);
+    return;
+  }
+  try {
+    const result = await api(body);
+    if (apply) apply(result);
+  } catch {
+    goOffline();
+  }
+}
+
+function persistSettings() {
+  send({ action: "settings", settings });
+}
+
+/* ---------- bijhouden ---------- */
+
 function recordAnswer(question, correct) {
   const first = !stats.questions[question.id];
   const entry = stats.questions[question.id] || { good: 0, bad: 0, run: 0 };
   entry[correct ? "good" : "bad"] += 1;
-  // Meteen de eerste keer goed telt zwaarder: die reeks begint hoger.
+  // Meteen de eerste keer goed telt zwaarder: die reeks begint hoger. De
+  // server rekent hetzelfde en corrigeert dit zo nodig; dit is alleen zodat
+  // het scherm meteen klopt.
   if (!correct) entry.run = 0;
   else entry.run = first ? FIRST_TIME_STREAK : (entry.run || 0) + 1;
   entry.last = Date.now();
@@ -75,7 +133,15 @@ function recordAnswer(question, correct) {
   streak.current = correct ? streak.current + 1 : 0;
   streak.best = Math.max(streak.best, streak.current);
 
-  save(STATS_KEY, stats);
+  send({ action: "answer", questionId: question.id, correct }, (result) => {
+    stats.questions[result.question.id] = {
+      good: result.question.good,
+      bad: result.question.bad,
+      run: result.question.run,
+      last: result.question.last,
+    };
+    stats.streak = result.streak;
+  });
   return first;
 }
 
@@ -83,14 +149,15 @@ function recordRound() {
   const answered = answeredQuestions();
   if (round.recorded || answered.length === 0) return;
   round.recorded = true;
-  stats.rounds.unshift({
+
+  const entry = {
     at: Date.now(),
     total: answered.length,
     good: countGood(),
     topic: settings.topic,
-  });
-  stats.rounds = stats.rounds.slice(0, MAX_ROUNDS);
-  save(STATS_KEY, stats);
+  };
+  stats.rounds = [entry, ...stats.rounds].slice(0, MAX_ROUNDS);
+  send({ action: "round", ...entry });
 }
 
 /* ---------- kleine helpers ---------- */
@@ -514,7 +581,7 @@ function roundsSection() {
 
 function practiceTopic(tag) {
   settings.topic = tag;
-  save(SETTINGS_KEY, settings);
+  persistSettings();
   $("topic").value = tag;
   startRound(pickQuestions());
 }
@@ -698,7 +765,7 @@ function bindEvents() {
     chip.addEventListener("click", () => {
       const value = chip.dataset.amount;
       settings.amount = value === "all" ? "all" : Number(value);
-      save(SETTINGS_KEY, settings);
+      persistSettings();
       renderStart();
     });
   }
@@ -707,7 +774,7 @@ function bindEvents() {
     const value = Number(event.target.value);
     if (!value) return;
     settings.amount = Math.min(Math.max(1, value), allQuestions.length);
-    save(SETTINGS_KEY, settings);
+    persistSettings();
 
     // Niet via renderStart(), anders springt de cursor uit het invoerveld.
     for (const chip of document.querySelectorAll("#amount-chips .chip")) {
@@ -718,21 +785,21 @@ function bindEvents() {
 
   $("topic").addEventListener("change", (event) => {
     settings.topic = event.target.value;
-    save(SETTINGS_KEY, settings);
+    persistSettings();
     renderStart();
   });
 
   for (const chip of document.querySelectorAll("#mix-chips .chip")) {
     chip.addEventListener("click", () => {
       settings.mix = chip.dataset.mix;
-      save(SETTINGS_KEY, settings);
+      persistSettings();
       renderStart();
     });
   }
 
   $("focus-mistakes").addEventListener("change", (event) => {
     settings.focusMistakes = event.target.checked;
-    save(SETTINGS_KEY, settings);
+    persistSettings();
     renderStart();
   });
 
@@ -757,7 +824,10 @@ function bindEvents() {
   $("btn-clear-stats").addEventListener("click", () => {
     if (!confirm("Alle statistieken wissen?")) return;
     stats = emptyStats();
-    save(STATS_KEY, stats);
+    send({ action: "reset" }, (state) => {
+      stats = { ...emptyStats(), ...state.stats };
+      renderStart();
+    });
     renderStart();
   });
 
@@ -780,6 +850,44 @@ function bindEvents() {
 
 /* ---------- opstarten ---------- */
 
+/** Haalt de voortgang van de server. Lukt dat niet, dan lokale opslag. */
+async function loadState() {
+  try {
+    const state = await api();
+    settings = { ...DEFAULT_SETTINGS, ...state.settings };
+    stats = { ...emptyStats(), ...state.stats };
+    await importLocalOnce();
+  } catch {
+    online = false;
+    $("offline").hidden = false;
+    settings = loadSettings();
+    stats = loadStats();
+  }
+}
+
+/** Zet voortgang die nog in deze browser stond eenmalig over naar de server. */
+async function importLocalOnce() {
+  if (readJSON(IMPORTED_KEY)) return;
+
+  const local = loadStats();
+  const heeftVoortgang =
+    Object.keys(local.questions).length > 0 || local.rounds.length > 0;
+  if (!heeftVoortgang) {
+    save(IMPORTED_KEY, true);
+    return;
+  }
+
+  // Vlag vóór het versturen zetten: wie tijdens het importeren herlaadt, zou
+  // anders een tweede keer importeren en zijn aantallen verdubbelen.
+  save(IMPORTED_KEY, true);
+  try {
+    const state = await api({ action: "import", stats: local });
+    stats = { ...emptyStats(), ...state.stats };
+  } catch {
+    save(IMPORTED_KEY, false); // mislukt: volgende keer opnieuw proberen
+  }
+}
+
 async function init() {
   try {
     const response = await fetch("data/questions.json");
@@ -794,8 +902,7 @@ async function init() {
     return;
   }
 
-  settings = loadSettings();
-  stats = loadStats();
+  await loadState();
 
   $("loading").hidden = true;
   $("amount-custom").max = allQuestions.length;

@@ -267,4 +267,15 @@ button.link {
 .round-score.meh { color: #b07d12; }
 .round-score.low { color: var(--bad); }
 
+.notice {
+  margin: 1rem 0 0;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid #c8901f;
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
 #loading { color: var(--muted); }

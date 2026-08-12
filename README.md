@@ -1,17 +1,20 @@
 # Spelregelvragen oefenen
 
 Oefentool voor de KNVB-spelregelvragen veldvoetbal (seizoen 2026-2027). Statische
-web-app: geen build-stap, geen server-side code, alles blijft in je browser.
+pagina met één serverless functie; je voortgang staat in Postgres.
 
-## Gebruiken
+## Lokaal draaien
 
 ```bash
-python3 -m http.server 8000
+npm install
+npm run dev
 ```
 
-Open daarna <http://localhost:8000>. (Rechtstreeks `index.html` openen werkt niet,
-omdat de browser dan geen JSON-bestand mag laden.) De app kan ook zonder aanpassing
-op GitHub Pages gehost worden.
+Open daarna <http://localhost:3000>. De ontwikkelserver draait de API tegen Postgres
+in het geheugen (PGlite), dus je hebt lokaal geen databaseverbinding nodig — die
+voortgang is wel weg zodra je de server stopt.
+
+`npm test` draait de databasequeries tegen diezelfde in-memory Postgres.
 
 ## Wat het doet
 
@@ -29,8 +32,32 @@ op GitHub Pages gehost worden.
 - Statistiekenscherm: kerncijfers (antwoorden, percentage goed, hoeveel van de 300
   vragen gezien, langste reeks goed), score per onderwerp met de zwakste bovenaan en
   in één klik te oefenen, de tien vaakst foute vragen en je laatste rondes.
-- Score-historie in `localStorage`; te wissen vanaf het statistiekenscherm.
+- Voortgang in de database, dus op elk apparaat hetzelfde; te wissen vanaf het
+  statistiekenscherm.
 - Toetsenbord: `a`–`d` of `1`–`4` om te antwoorden, `Enter` voor de volgende vraag.
+
+## Waar de voortgang staat
+
+Postgres (Neon, gekoppeld via Vercel), benaderd via één serverless functie:
+
+| Route | Wat het doet |
+| :--- | :--- |
+| `GET /api/state` | instellingen en statistieken ophalen |
+| `POST /api/state` | `action`: `answer`, `round`, `settings`, `import` of `reset` |
+
+Drie tabellen, aangemaakt bij de eerste aanroep: `players` (instellingen en de algemene
+reeks), `question_stats` (per vraag goed/fout/reeks) en `rounds`. De reeksregels worden
+in SQL bijgewerkt, zodat twee apparaten elkaars antwoorden niet overschrijven.
+
+**Voorlopig is er één gedeeld account:** iedereen die de site opent ziet dezelfde
+voortgang. De tabellen hebben al een `player_id`, dus echte accounts zijn later een
+kleine stap.
+
+Voortgang die nog in een browser stond (uit de vorige versie) wordt bij de eerste keer
+laden eenmalig overgezet en opgeteld bij wat er al staat. Is de API niet bereikbaar, dan
+meldt de app dat en bewaart hij verder in `localStorage`.
+
+De verbinding komt uit `DATABASE_URL` (of `POSTGRES_URL`); op Vercel staan die er al.
 
 ## Vragen bijwerken
 

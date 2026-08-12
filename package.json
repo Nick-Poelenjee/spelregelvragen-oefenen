@@ -1,0 +1,17 @@
+{
+  "name": "spelregelvragen-oefenen",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Oefentool voor de KNVB-spelregelvragen veldvoetbal",
+  "scripts": {
+    "dev": "node tools/devserver.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4"
+  }
+}
