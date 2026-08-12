@@ -104,7 +104,9 @@ die je duidelijk kent hoeven niet in een foutenronde terug te komen.
   Half om half, Vooral herhalen (25% nieuw). Wordt onthouden.
 - Is een van beide bakken te klein, dan vult de andere de ronde aan.
 - Per vraag bijhouden hoe vaak je hem achter elkaar goed had. Eén fout antwoord zet die
-  teller terug op 0. Twee drempels:
+  teller terug op 0. Ging een vraag **meteen de eerste keer goed**, dan start de reeks
+  op 6: nog twee keer goed en hij is afgerond. Na een fout antwoord telt hij weer
+  normaal vanaf 1. Twee drempels:
   - **4× goed op rij** = beheerst: blijft weg uit rondes met "Focus op vragen die ik
     eerder fout had", maar kan in gewone rondes gewoon terugkomen.
   - **8× goed op rij** = afgerond: komt in geen enkele ronde meer terug. Bij het achtste
