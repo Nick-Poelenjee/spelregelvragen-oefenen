@@ -22,8 +22,9 @@ op GitHub Pages gehost worden.
 - Zelf de mix bepalen tussen nieuwe en eerder geziene vragen: willekeurig (standaard),
   alleen nieuw, vooral nieuw, half om half of vooral herhalen.
 - "Alleen fouten opnieuw" en "Focus op vragen die ik eerder fout had". Een vraag die je
-  4× op rij goed had geldt als beheerst en blijft buiten die foutenfocus; één fout
-  antwoord zet die teller weer op 0.
+  4× op rij goed had geldt als beheerst en blijft buiten die foutenfocus; na 8× op rij
+  is hij afgerond en komt hij in geen enkele ronde meer terug. Eén fout antwoord zet die
+  teller weer op 0.
 - Statistiekenscherm: kerncijfers (antwoorden, percentage goed, hoeveel van de 300
   vragen gezien, langste reeks goed), score per onderwerp met de zwakste bovenaan en
   in één klik te oefenen, de tien vaakst foute vragen en je laatste rondes.

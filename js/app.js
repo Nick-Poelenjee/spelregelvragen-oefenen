@@ -5,7 +5,8 @@ const SETTINGS_KEY = "spelregels.settings";
 const STATS_KEY = "spelregels.stats";
 const DEFAULT_SETTINGS = { amount: 10, topic: "", focusMistakes: false, mix: "random" };
 const MAX_ROUNDS = 50; // bewaarde rondes in de geschiedenis
-const MASTERY_STREAK = 4; // zo vaak op rij goed = beheerst
+const MASTERY_STREAK = 4; // zo vaak op rij goed = beheerst (buiten de foutenfocus)
+const RETIRE_STREAK = 8; // zo vaak op rij goed = afgerond (komt niet meer terug)
 
 const $ = (id) => document.getElementById(id);
 
@@ -164,9 +165,17 @@ function isNew(question) {
   return !stats.questions[question.id];
 }
 
-function isMastered(question) {
+function streakOf(question) {
   const entry = stats.questions[question.id];
-  return Boolean(entry) && (entry.run || 0) >= MASTERY_STREAK;
+  return entry ? entry.run || 0 : 0;
+}
+
+function isMastered(question) {
+  return streakOf(question) >= MASTERY_STREAK;
+}
+
+function isRetired(question) {
+  return streakOf(question) >= RETIRE_STREAK;
 }
 
 function hasMistake(question) {
@@ -174,11 +183,11 @@ function hasMistake(question) {
   return Boolean(entry) && entry.bad > 0;
 }
 
-/** Vragen waaruit een ronde getrokken mag worden, met de beheerste eruit
- *  gefilterd zodra de foutenfocus aan staat. */
+/** Vragen waaruit een ronde getrokken mag worden. Afgeronde vragen vallen altijd
+ *  af; de beheerste alleen zodra de foutenfocus aan staat. */
 function eligiblePool() {
-  const pool = poolFor(settings.topic);
-  return settings.focusMistakes ? pool.filter((q) => !isMastered(q)) : pool;
+  const skip = settings.focusMistakes ? isMastered : isRetired;
+  return poolFor(settings.topic).filter((q) => !skip(q));
 }
 
 /** Hoeveel nieuwe en hoeveel eerder geziene vragen een ronde krijgt. Als een
@@ -197,28 +206,43 @@ function roundSize(poolSize) {
 }
 
 function renderPoolInfo() {
+  const pool = poolFor(settings.topic);
   const eligible = eligiblePool();
   const asked = roundSize(eligible.length);
-  const lines = [
-    `${plural(asked, "vraag", "vragen")} uit ${eligible.length} beschikbare ` +
-      (settings.topic ? `vragen over #${settings.topic}.` : "vragen."),
-  ];
+  const onderwerp = settings.topic ? ` over #${settings.topic}` : "";
+  const lines = [];
 
-  const fresh = eligible.filter(isNew).length;
-  const counts = splitCounts(asked, fresh, eligible.length - fresh);
-  if (counts) {
-    lines.push(`Daarvan ${counts.fresh} nieuw en ${counts.seen} herhaling.`);
+  if (eligible.length === 0) {
+    lines.push(
+      `Geen vragen meer${onderwerp}: alles is afgerond. ` +
+        "Wis de statistieken om opnieuw te beginnen.",
+    );
+  } else {
+    lines.push(
+      `${plural(asked, "vraag", "vragen")} uit ${eligible.length} beschikbare vragen${onderwerp}.`,
+    );
+    const fresh = eligible.filter(isNew).length;
+    const counts = splitCounts(asked, fresh, eligible.length - fresh);
+    if (counts) lines.push(`Daarvan ${counts.fresh} nieuw en ${counts.seen} herhaling.`);
   }
 
-  if (settings.focusMistakes) {
-    const mastered = poolFor(settings.topic).filter(isMastered).length;
-    if (mastered > 0) {
-      const verb = mastered === 1 ? "blijft" : "blijven";
-      lines.push(
-        `${plural(mastered, "vraag is", "vragen zijn")} beheerst ` +
-          `(${MASTERY_STREAK}× goed op rij) en ${verb} buiten deze modus.`,
-      );
-    }
+  const retired = pool.filter(isRetired).length;
+  if (retired > 0) {
+    const verb = retired === 1 ? "komt" : "komen";
+    lines.push(
+      `${plural(retired, "vraag is", "vragen zijn")} afgerond ` +
+        `(${RETIRE_STREAK}× goed op rij) en ${verb} niet meer terug.`,
+    );
+  }
+
+  // Beheerst maar nog niet afgerond: alleen de foutenfocus slaat die over.
+  const mastered = pool.filter((q) => isMastered(q) && !isRetired(q)).length;
+  if (settings.focusMistakes && mastered > 0) {
+    const verb = mastered === 1 ? "blijft" : "blijven";
+    lines.push(
+      `${plural(mastered, "vraag is", "vragen zijn")} beheerst ` +
+        `(${MASTERY_STREAK}× goed op rij) en ${verb} buiten deze modus.`,
+    );
   }
 
   $("pool-info").textContent = lines.join(" ");
@@ -351,6 +375,7 @@ function tilesSection(totals) {
       `nu ${stats.streak.current} achter elkaar`,
     ),
     masteredTile(),
+    retiredTile(),
   );
   section.append(grid);
   return section;
@@ -361,12 +386,21 @@ let topicsExpanded = false;
 
 function masteredTile() {
   const mastered = allQuestions.filter(isMastered).length;
-  const pct = percent(mastered, allQuestions.length);
   return tile(
     "Beheerst",
     `${mastered} / ${allQuestions.length}`,
     `${MASTERY_STREAK}× goed op rij`,
-    bar(pct, "ok"),
+    bar(percent(mastered, allQuestions.length), "ok"),
+  );
+}
+
+function retiredTile() {
+  const retired = allQuestions.filter(isRetired).length;
+  return tile(
+    "Afgerond",
+    `${retired} / ${allQuestions.length}`,
+    `${RETIRE_STREAK}× goed op rij, komt niet meer terug`,
+    bar(percent(retired, allQuestions.length), "ok"),
   );
 }
 
@@ -578,9 +612,13 @@ function answer(letter) {
   const feedback = $("feedback");
   feedback.hidden = false;
   feedback.classList.add(correct ? "good" : "bad");
-  feedback.textContent = correct
-    ? "Goed!"
-    : `Fout — het juiste antwoord is ${q.answer}.`;
+  if (!correct) {
+    feedback.textContent = `Fout — het juiste antwoord is ${q.answer}.`;
+  } else if (streakOf(q) === RETIRE_STREAK) {
+    feedback.textContent = `Goed! ${RETIRE_STREAK}× op rij — deze vraag is afgerond.`;
+  } else {
+    feedback.textContent = "Goed!";
+  }
 
   $("count-good").textContent = countGood();
   $("count-bad").textContent = countBad();
