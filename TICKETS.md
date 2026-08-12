@@ -118,6 +118,28 @@ die je duidelijk kent hoeven niet in een foutenronde terug te komen.
 **Klaar als:** de gekozen verhouding klopt in de getrokken ronde, een vraag na vier goede
 antwoorden op rij niet meer in een foutenronde verschijnt en na acht helemaal niet meer.
 
+## T9 — Voortgang in de database
+
+**Waarom:** voortgang stond in `localStorage` en was daarmee gebonden aan één browser.
+
+**Wat:**
+- Postgres (Neon, via Vercel) met drie tabellen: `players` (instellingen + algemene
+  reeks), `question_stats` (per vraag goed/fout/reeks) en `rounds`.
+- Eén endpoint `/api/state`: `GET` haalt alles op, `POST` verwerkt `answer`, `round`,
+  `settings`, `import` en `reset`.
+- De reeksregels (start op 6, +1, terug naar 0) worden in SQL bijgewerkt, zodat twee
+  apparaten elkaars antwoorden niet overschrijven.
+- **Voorlopig één gedeeld account:** iedereen die de site opent, ziet dezelfde
+  voortgang. De tabellen hebben al een `player_id`, dus echte accounts zijn later een
+  kleine stap.
+- Voortgang die nog in een browser stond, wordt bij de eerste keer laden eenmalig
+  overgezet en opgeteld bij wat er al staat.
+- Is de API niet bereikbaar, dan meldt de app dat en bewaart hij lokaal verder.
+- `npm run dev` draait de app lokaal met Postgres in het geheugen; `npm test` draait de
+  queries tegen diezelfde in-memory Postgres.
+
+**Klaar als:** je in de ene browser oefent en de voortgang in een andere browser terugziet.
+
 ## Buiten scope (voor nu)
 
 - Accounts / inloggen, meerdere gebruikers.
