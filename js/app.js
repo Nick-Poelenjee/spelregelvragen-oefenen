@@ -3,8 +3,10 @@
 const LETTERS = ["a", "b", "c", "d"];
 const SETTINGS_KEY = "spelregels.settings";
 const STATS_KEY = "spelregels.stats";
-const DEFAULT_SETTINGS = { amount: 10, topic: "", focusMistakes: false };
+const DEFAULT_SETTINGS = { amount: 10, topic: "", focusMistakes: false, mix: "random" };
 const MAX_ROUNDS = 50; // bewaarde rondes in de geschiedenis
+const MASTERY_STREAK = 4; // zo vaak op rij goed = beheerst (buiten de foutenfocus)
+const RETIRE_STREAK = 8; // zo vaak op rij goed = afgerond (komt niet meer terug)
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,7 +21,7 @@ let round = null; // { questions, index, answers: {id: letter}, recorded }
 
 function emptyStats() {
   return {
-    questions: {}, // { [vraagId]: { good, bad, last } }
+    questions: {}, // { [vraagId]: { good, bad, run, last } }
     rounds: [], // [{ at, total, good, topic }]
     streak: { current: 0, best: 0 },
   };
@@ -59,8 +61,9 @@ function loadStats() {
 }
 
 function recordAnswer(question, correct) {
-  const entry = stats.questions[question.id] || { good: 0, bad: 0 };
+  const entry = stats.questions[question.id] || { good: 0, bad: 0, run: 0 };
   entry[correct ? "good" : "bad"] += 1;
+  entry.run = correct ? (entry.run || 0) + 1 : 0;
   entry.last = Date.now();
   stats.questions[question.id] = entry;
 
@@ -158,6 +161,45 @@ function poolFor(topic) {
   return topic ? allQuestions.filter((q) => q.tags.includes(topic)) : allQuestions;
 }
 
+function isNew(question) {
+  return !stats.questions[question.id];
+}
+
+function streakOf(question) {
+  const entry = stats.questions[question.id];
+  return entry ? entry.run || 0 : 0;
+}
+
+function isMastered(question) {
+  return streakOf(question) >= MASTERY_STREAK;
+}
+
+function isRetired(question) {
+  return streakOf(question) >= RETIRE_STREAK;
+}
+
+function hasMistake(question) {
+  const entry = stats.questions[question.id];
+  return Boolean(entry) && entry.bad > 0;
+}
+
+/** Vragen waaruit een ronde getrokken mag worden. Afgeronde vragen vallen altijd
+ *  af; de beheerste alleen zodra de foutenfocus aan staat. */
+function eligiblePool() {
+  const skip = settings.focusMistakes ? isMastered : isRetired;
+  return poolFor(settings.topic).filter((q) => !skip(q));
+}
+
+/** Hoeveel nieuwe en hoeveel eerder geziene vragen een ronde krijgt. Als een
+ *  van beide bakken te klein is, vult de andere de rest aan. */
+function splitCounts(size, freshAvailable, seenAvailable) {
+  if (settings.mix === "random") return null;
+  const fresh = Math.min(Math.round((size * Number(settings.mix)) / 100), freshAvailable);
+  const seen = Math.min(size - fresh, seenAvailable);
+  const short = size - fresh - seen;
+  return { fresh: fresh + Math.min(short, freshAvailable - fresh), seen };
+}
+
 function roundSize(poolSize) {
   if (settings.amount === "all") return poolSize;
   return Math.min(Math.max(1, Number(settings.amount) || 10), poolSize);
@@ -165,10 +207,45 @@ function roundSize(poolSize) {
 
 function renderPoolInfo() {
   const pool = poolFor(settings.topic);
-  const asked = roundSize(pool.length);
-  $("pool-info").textContent =
-    `${plural(asked, "vraag", "vragen")} uit ${pool.length} beschikbare ` +
-    (settings.topic ? `vragen over #${settings.topic}.` : "vragen.");
+  const eligible = eligiblePool();
+  const asked = roundSize(eligible.length);
+  const onderwerp = settings.topic ? ` over #${settings.topic}` : "";
+  const lines = [];
+
+  if (eligible.length === 0) {
+    lines.push(
+      `Geen vragen meer${onderwerp}: alles is afgerond. ` +
+        "Wis de statistieken om opnieuw te beginnen.",
+    );
+  } else {
+    lines.push(
+      `${plural(asked, "vraag", "vragen")} uit ${eligible.length} beschikbare vragen${onderwerp}.`,
+    );
+    const fresh = eligible.filter(isNew).length;
+    const counts = splitCounts(asked, fresh, eligible.length - fresh);
+    if (counts) lines.push(`Daarvan ${counts.fresh} nieuw en ${counts.seen} herhaling.`);
+  }
+
+  const retired = pool.filter(isRetired).length;
+  if (retired > 0) {
+    const verb = retired === 1 ? "komt" : "komen";
+    lines.push(
+      `${plural(retired, "vraag is", "vragen zijn")} afgerond ` +
+        `(${RETIRE_STREAK}× goed op rij) en ${verb} niet meer terug.`,
+    );
+  }
+
+  // Beheerst maar nog niet afgerond: alleen de foutenfocus slaat die over.
+  const mastered = pool.filter((q) => isMastered(q) && !isRetired(q)).length;
+  if (settings.focusMistakes && mastered > 0) {
+    const verb = mastered === 1 ? "blijft" : "blijven";
+    lines.push(
+      `${plural(mastered, "vraag is", "vragen zijn")} beheerst ` +
+        `(${MASTERY_STREAK}× goed op rij) en ${verb} buiten deze modus.`,
+    );
+  }
+
+  $("pool-info").textContent = lines.join(" ");
 }
 
 function syncAmountUI() {
@@ -178,12 +255,19 @@ function syncAmountUI() {
   $("amount-custom").value = match ? "" : settings.amount;
 }
 
+function syncMixUI() {
+  for (const chip of document.querySelectorAll("#mix-chips .chip")) {
+    chip.setAttribute("aria-pressed", chip.dataset.mix === String(settings.mix));
+  }
+}
+
 function renderStart() {
   syncAmountUI();
+  syncMixUI();
   $("topic").value = settings.topic;
   $("focus-mistakes").checked = settings.focusMistakes;
   renderPoolInfo();
-  $("btn-start").disabled = poolFor(settings.topic).length === 0;
+  $("btn-start").disabled = eligiblePool().length === 0;
   renderSummary();
   showScreen("start");
 }
@@ -290,6 +374,8 @@ function tilesSection(totals) {
       plural(stats.streak.best, "goed", "goed"),
       `nu ${stats.streak.current} achter elkaar`,
     ),
+    masteredTile(),
+    retiredTile(),
   );
   section.append(grid);
   return section;
@@ -297,6 +383,26 @@ function tilesSection(totals) {
 
 const TOPICS_COLLAPSED = 12;
 let topicsExpanded = false;
+
+function masteredTile() {
+  const mastered = allQuestions.filter(isMastered).length;
+  return tile(
+    "Beheerst",
+    `${mastered} / ${allQuestions.length}`,
+    `${MASTERY_STREAK}× goed op rij`,
+    bar(percent(mastered, allQuestions.length), "ok"),
+  );
+}
+
+function retiredTile() {
+  const retired = allQuestions.filter(isRetired).length;
+  return tile(
+    "Afgerond",
+    `${retired} / ${allQuestions.length}`,
+    `${RETIRE_STREAK}× goed op rij, komt niet meer terug`,
+    bar(percent(retired, allQuestions.length), "ok"),
+  );
+}
 
 function topicsSection() {
   const section = el("section", "card");
@@ -420,19 +526,28 @@ function shuffle(items) {
 }
 
 function pickQuestions() {
-  const pool = poolFor(settings.topic);
-  const size = roundSize(pool.length);
-  if (!settings.focusMistakes) return shuffle(pool).slice(0, size);
+  const eligible = eligiblePool();
+  const size = roundSize(eligible.length);
+  const fresh = shuffle(eligible.filter(isNew));
+  const seen = shuffle(eligible.filter((q) => !isNew(q)));
 
-  // Eerst vragen die eerder fout gingen, dan ongeziene, dan de rest.
-  const score = (q) => {
-    const s = stats.questions[q.id];
-    if (!s) return 1;
-    return s.bad > 0 ? 0 : 2;
-  };
-  const buckets = [[], [], []];
-  for (const q of shuffle(pool)) buckets[score(q)].push(q);
-  return buckets.flat().slice(0, size);
+  // Binnen de eerder geziene vragen gaan de fout beantwoorde voor.
+  const missed = seen.filter(hasMistake);
+  const known = seen.filter((q) => !hasMistake(q));
+  const seenOrdered = settings.focusMistakes ? [...missed, ...known] : seen;
+
+  const counts = splitCounts(size, fresh.length, seenOrdered.length);
+  if (!counts) {
+    // Geen voorkeur: puur willekeurig, of fouten eerst bij de foutenfocus.
+    if (!settings.focusMistakes) return shuffle(eligible).slice(0, size);
+    return [...missed, ...fresh, ...known].slice(0, size);
+  }
+
+  const picked = [
+    ...fresh.slice(0, counts.fresh),
+    ...seenOrdered.slice(0, counts.seen),
+  ];
+  return shuffle(picked);
 }
 
 function startRound(questions) {
@@ -497,9 +612,13 @@ function answer(letter) {
   const feedback = $("feedback");
   feedback.hidden = false;
   feedback.classList.add(correct ? "good" : "bad");
-  feedback.textContent = correct
-    ? "Goed!"
-    : `Fout — het juiste antwoord is ${q.answer}.`;
+  if (!correct) {
+    feedback.textContent = `Fout — het juiste antwoord is ${q.answer}.`;
+  } else if (streakOf(q) === RETIRE_STREAK) {
+    feedback.textContent = `Goed! ${RETIRE_STREAK}× op rij — deze vraag is afgerond.`;
+  } else {
+    feedback.textContent = "Goed!";
+  }
 
   $("count-good").textContent = countGood();
   $("count-bad").textContent = countBad();
@@ -596,9 +715,18 @@ function bindEvents() {
     renderStart();
   });
 
+  for (const chip of document.querySelectorAll("#mix-chips .chip")) {
+    chip.addEventListener("click", () => {
+      settings.mix = chip.dataset.mix;
+      save(SETTINGS_KEY, settings);
+      renderStart();
+    });
+  }
+
   $("focus-mistakes").addEventListener("change", (event) => {
     settings.focusMistakes = event.target.checked;
     save(SETTINGS_KEY, settings);
+    renderStart();
   });
 
   $("btn-start").addEventListener("click", () => startRound(pickQuestions()));
