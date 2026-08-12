@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS = { amount: 10, topic: "", focusMistakes: false, mix: "ra
 const MAX_ROUNDS = 50; // bewaarde rondes in de geschiedenis
 const MASTERY_STREAK = 4; // zo vaak op rij goed = beheerst (buiten de foutenfocus)
 const RETIRE_STREAK = 8; // zo vaak op rij goed = afgerond (komt niet meer terug)
+const FIRST_TIME_STREAK = 6; // startstand als een vraag meteen de eerste keer goed gaat
 
 const $ = (id) => document.getElementById(id);
 
@@ -61,9 +62,12 @@ function loadStats() {
 }
 
 function recordAnswer(question, correct) {
+  const first = !stats.questions[question.id];
   const entry = stats.questions[question.id] || { good: 0, bad: 0, run: 0 };
   entry[correct ? "good" : "bad"] += 1;
-  entry.run = correct ? (entry.run || 0) + 1 : 0;
+  // Meteen de eerste keer goed telt zwaarder: die reeks begint hoger.
+  if (!correct) entry.run = 0;
+  else entry.run = first ? FIRST_TIME_STREAK : (entry.run || 0) + 1;
   entry.last = Date.now();
   stats.questions[question.id] = entry;
 
@@ -72,6 +76,7 @@ function recordAnswer(question, correct) {
   streak.best = Math.max(streak.best, streak.current);
 
   save(STATS_KEY, stats);
+  return first;
 }
 
 function recordRound() {
@@ -601,7 +606,7 @@ function answer(letter) {
 
   round.answers[q.id] = letter;
   const correct = letter === q.answer;
-  recordAnswer(q, correct);
+  const first = recordAnswer(q, correct);
 
   for (const button of $("options").querySelectorAll("button")) {
     button.disabled = true;
@@ -614,8 +619,10 @@ function answer(letter) {
   feedback.classList.add(correct ? "good" : "bad");
   if (!correct) {
     feedback.textContent = `Fout — het juiste antwoord is ${q.answer}.`;
-  } else if (streakOf(q) === RETIRE_STREAK) {
+  } else if (streakOf(q) >= RETIRE_STREAK) {
     feedback.textContent = `Goed! ${RETIRE_STREAK}× op rij — deze vraag is afgerond.`;
+  } else if (first) {
+    feedback.textContent = `Goed! Meteen de eerste keer — de reeks start op ${FIRST_TIME_STREAK}.`;
   } else {
     feedback.textContent = "Goed!";
   }
