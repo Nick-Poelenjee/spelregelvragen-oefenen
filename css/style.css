@@ -189,6 +189,7 @@ button.link {
 
 /* Statistieken */
 .hint { color: var(--muted); font-size: 0.85rem; margin: -0.4rem 0 0.9rem; }
+.hint.indent { margin: 0.35rem 0 0 1.6rem; }
 .empty { color: var(--muted); }
 
 .tiles {

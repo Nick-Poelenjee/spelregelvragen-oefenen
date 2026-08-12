@@ -42,11 +42,23 @@
       </fieldset>
 
       <fieldset>
+        <legend>Nieuw of herhalen</legend>
+        <div class="chips" id="mix-chips">
+          <button type="button" class="chip" data-mix="random">Willekeurig</button>
+          <button type="button" class="chip" data-mix="100">Alleen nieuw</button>
+          <button type="button" class="chip" data-mix="75">Vooral nieuw</button>
+          <button type="button" class="chip" data-mix="50">Half om half</button>
+          <button type="button" class="chip" data-mix="25">Vooral herhalen</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
         <legend>Opties</legend>
         <label class="inline">
           <input type="checkbox" id="focus-mistakes">
           Focus op vragen die ik eerder fout had
         </label>
+        <p class="hint indent">Vragen die je 4× op rij goed had, slaat deze modus over.</p>
       </fieldset>
 
       <p class="pool" id="pool-info"></p>

@@ -94,6 +94,25 @@ Simpel gehouden: statische web-app (HTML/CSS/JS, geen build-stap), vragen in é�
 **Klaar als:** je na een paar rondes ziet op welk onderwerp je het slechtst scoort en
 daar in één klik op kunt oefenen.
 
+## T8 — Mix nieuw/herhaling en beheerste vragen
+
+**Waarom:** je wilt zelf kunnen sturen hoeveel nieuwe stof een ronde bevat, en vragen
+die je duidelijk kent hoeven niet in een foutenronde terug te komen.
+
+**Wat:**
+- Keuze "Nieuw of herhalen": Willekeurig (standaard), Alleen nieuw, Vooral nieuw (75%),
+  Half om half, Vooral herhalen (25% nieuw). Wordt onthouden.
+- Is een van beide bakken te klein, dan vult de andere de ronde aan.
+- Per vraag bijhouden hoe vaak je hem achter elkaar goed had. Vanaf **4× goed op rij**
+  geldt de vraag als beheerst; één fout antwoord zet de teller terug op 0.
+- Met "Focus op vragen die ik eerder fout had" aan, blijven beheerste vragen buiten de
+  ronde. In gewone rondes kunnen ze gewoon terugkomen.
+- Het startscherm meldt de verdeling en hoeveel vragen zijn overgeslagen; de
+  statistieken krijgen een tegel "Beheerst".
+
+**Klaar als:** de gekozen verhouding klopt in de getrokken ronde en een vraag na vier
+goede antwoorden op rij niet meer in een foutenronde verschijnt.
+
 ## Buiten scope (voor nu)
 
 - Accounts / inloggen, meerdere gebruikers.
