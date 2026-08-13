@@ -15,6 +15,10 @@ const FIRST_TIME_STREAK = 6; // startstand als een vraag meteen de eerste keer g
 
 const API = "/api/state";
 const IMPORTED_KEY = "spelregels.geimporteerd";
+const QUEUE_KEY = "spelregels.wachtrij";
+const MAX_QUEUE = 500; // meer dan genoeg voor een lange offline sessie
+const RETRY_MS = 15000; // zo vaak proberen we het opnieuw als de API wegviel
+const REFRESH_MS = 2000; // ondergrens tussen twee verversingen, tegen bursts
 
 const $ = (id) => document.getElementById(id);
 
@@ -23,6 +27,8 @@ let questionById = new Map();
 let settings = { ...DEFAULT_SETTINGS };
 let stats = emptyStats();
 let online = true; // false zodra de API niet bereikbaar blijkt
+let lastAttempt = 0; // wanneer we voor het laatst probeerden terug te komen
+let lastLoad = 0; // wanneer we de staat voor het laatst van de server haalden
 
 let round = null; // { questions, index, answers: {id: letter}, recorded }
 
@@ -86,29 +92,75 @@ async function api(body) {
   return response.json();
 }
 
-/** Vanaf hier bewaren we lokaal, zodat er niets verloren gaat. */
-function goOffline() {
-  if (!online) return;
-  online = false;
-  $("offline").hidden = false;
+function saveLocal() {
   save(STATS_KEY, stats);
   save(SETTINGS_KEY, settings);
 }
 
-/** Stuurt een wijziging naar de server en verwerkt het antwoord. Mislukt dat,
- *  dan schakelt de app over op lokale opslag. */
+/* Wijzigingen die de server niet heeft gehaald, blijven in een wachtrij staan
+ * tot dat wel lukt — ook als je de pagina tussendoor sluit. */
+
+function queued() {
+  const list = readJSON(QUEUE_KEY);
+  return Array.isArray(list) ? list : [];
+}
+
+function enqueue(body) {
+  save(QUEUE_KEY, [...queued(), body].slice(-MAX_QUEUE));
+}
+
+/** Werkt de wachtrij op volgorde af. Geeft false als de server nog weg is. */
+async function flushQueue() {
+  let pending = queued();
+  while (pending.length > 0) {
+    try {
+      await api(pending[0]);
+    } catch {
+      return false;
+    }
+    pending = pending.slice(1);
+    save(QUEUE_KEY, pending);
+  }
+  return true;
+}
+
+/** Alleen de stand omzetten: bewaren doet de aanroeper, want tijdens het laden
+ *  staat er nog niets in `stats` en zou dat de lokale voortgang wissen. */
+function goOffline() {
+  if (!online) return;
+  online = false;
+  $("offline").hidden = false;
+}
+
+async function goOnline() {
+  online = true;
+  $("offline").hidden = true;
+  await refreshState(true);
+}
+
+/** Stuurt een wijziging naar de server. Mislukt dat, dan gaat hij de wachtrij
+ *  in en werkt de app lokaal verder tot de server terug is. */
 async function send(body, apply) {
-  if (!online) {
-    save(STATS_KEY, stats);
-    save(SETTINGS_KEY, settings);
-    return;
+  if (online) {
+    try {
+      const result = await api(body);
+      if (apply) apply(result);
+      return;
+    } catch {
+      enqueue(body);
+      goOffline();
+      saveLocal();
+      return;
+    }
   }
-  try {
-    const result = await api(body);
-    if (apply) apply(result);
-  } catch {
-    goOffline();
-  }
+
+  enqueue(body);
+  saveLocal();
+
+  // Af en toe kijken of de server er weer is.
+  if (Date.now() - lastAttempt < RETRY_MS) return;
+  lastAttempt = Date.now();
+  if (await flushQueue()) await goOnline();
 }
 
 function persistSettings() {
@@ -815,7 +867,15 @@ function bindEvents() {
     const wrong = round.questions.filter((q) => round.answers[q.id] !== q.answer);
     startRound(shuffle(wrong));
   });
-  $("btn-home").addEventListener("click", renderStart);
+  $("btn-home").addEventListener("click", () => {
+    renderStart();
+    refreshState();
+  });
+
+  // Terug in het tabblad: kijken of er elders iets bij gekomen is.
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refreshState();
+  });
 
   $("btn-stats").addEventListener("click", renderStatsScreen);
   $("btn-result-stats").addEventListener("click", renderStatsScreen);
@@ -852,16 +912,43 @@ function bindEvents() {
 
 /** Haalt de voortgang van de server. Lukt dat niet, dan lokale opslag. */
 async function loadState() {
+  // Eerst wat er nog klaarstond van een vorige sessie; anders zou de server
+  // (die die antwoorden nog niet kent) ze wegdrukken.
+  if (!(await flushQueue())) {
+    goOffline();
+    settings = loadSettings();
+    stats = loadStats();
+    return;
+  }
+
   try {
     const state = await api();
     settings = { ...DEFAULT_SETTINGS, ...state.settings };
     stats = { ...emptyStats(), ...state.stats };
+    lastLoad = Date.now();
     await importLocalOnce();
   } catch {
-    online = false;
-    $("offline").hidden = false;
+    goOffline();
     settings = loadSettings();
     stats = loadStats();
+  }
+}
+
+/** Haalt de laatste stand opnieuw op, bijvoorbeeld als je terugkomt in het
+ *  tabblad terwijl je op een ander apparaat verder oefende. */
+async function refreshState(force = false) {
+  if (!online || round?.recorded === false) return; // niet midden in een ronde
+  if (!force && Date.now() - lastLoad < REFRESH_MS) return;
+
+  try {
+    const state = await api();
+    settings = { ...DEFAULT_SETTINGS, ...state.settings };
+    stats = { ...emptyStats(), ...state.stats };
+    lastLoad = Date.now();
+    if (!$("screen-start").hidden) renderStart();
+    else if (!$("screen-stats").hidden) renderStatsScreen();
+  } catch {
+    goOffline();
   }
 }
 
