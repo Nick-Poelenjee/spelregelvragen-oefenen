@@ -142,6 +142,24 @@ antwoorden op rij niet meer in een foutenronde verschijnt en na acht helemaal ni
 
 **Klaar als:** je in de ene browser oefent en de voortgang in een andere browser terugziet.
 
+## T10 — Antwoorden in willekeurige volgorde
+
+**Waarom:** met een vaste volgorde onthoud je de plek van het antwoord in plaats van
+het antwoord zelf.
+
+**Wat:**
+- Per ronde krijgt elke vraag een eigen gehusselde volgorde van de vier opties; de
+  labels blijven gewoon a t/m d, van boven naar beneden.
+- De feedback, de groen/rood-markering en het overzicht van fouten noemen het label
+  zoals het in díé ronde op het scherm stond.
+- In de statistieken ("vaakst fout") vervalt de letter, want die verschilt per ronde;
+  daar staat alleen nog de tekst van het juiste antwoord.
+- Wat er wordt opgeslagen verandert niet: dat is en blijft de oorspronkelijke letter
+  uit de vragendatabase.
+
+**Klaar als:** dezelfde vraag in twee rondes een andere volgorde heeft en goed/fout in
+beide gevallen klopt.
+
 ## Buiten scope (voor nu)
 
 - Accounts / inloggen, meerdere gebruikers.

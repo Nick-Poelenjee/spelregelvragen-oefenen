@@ -598,7 +598,8 @@ function missedSection() {
     details.append(
       summary,
       el("p", "missed-text", q.question),
-      el("p", "missed-answer", `Juist: ${q.answer}. ${q.options[q.answer]}`),
+      // Zonder letter: de volgorde van de opties verschilt per ronde.
+      el("p", "missed-answer", `Juist: ${q.options[q.answer]}`),
     );
     item.append(details);
     list.append(item);
@@ -675,7 +676,15 @@ function pickQuestions() {
 }
 
 function startRound(questions) {
-  round = { questions, index: 0, answers: {}, recorded: false };
+  round = {
+    questions,
+    index: 0,
+    answers: {}, // { [vraagId]: oorspronkelijke letter }
+    recorded: false,
+    // Per vraag de volgorde waarin de opties getoond worden: positie 0 krijgt
+    // label a, positie 1 label b, enzovoort. Elke ronde opnieuw gehusseld.
+    order: Object.fromEntries(questions.map((q) => [q.id, shuffle(LETTERS)])),
+  };
   renderQuestion();
   showScreen("quiz");
 }
@@ -684,6 +693,27 @@ function startRound(questions) {
 
 function currentQuestion() {
   return round.questions[round.index];
+}
+
+/* De letters op het scherm horen bij de plek in de gehusselde volgorde; in
+ * `round.answers` en in de database staat altijd de oorspronkelijke letter. */
+
+function shownOptions(question) {
+  return round.order[question.id].map((original, i) => ({
+    letter: LETTERS[i],
+    original,
+    text: question.options[original],
+  }));
+}
+
+/** Oorspronkelijke letter achter een letter op het scherm. */
+function originalLetter(question, shown) {
+  return round.order[question.id][LETTERS.indexOf(shown)];
+}
+
+/** Letter op het scherm van een oorspronkelijke letter. */
+function shownLetter(question, original) {
+  return LETTERS[round.order[question.id].indexOf(original)];
 }
 
 function renderQuestion() {
@@ -700,13 +730,13 @@ function renderQuestion() {
 
   const list = $("options");
   list.replaceChildren();
-  for (const letter of LETTERS) {
+  for (const option of shownOptions(q)) {
     const item = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
-    button.dataset.letter = letter;
-    button.append(el("span", "letter", `${letter}.`), el("span", null, q.options[letter]));
-    button.addEventListener("click", () => answer(letter));
+    button.dataset.letter = option.letter;
+    button.append(el("span", "letter", `${option.letter}.`), el("span", null, option.text));
+    button.addEventListener("click", () => answer(option.letter));
     item.append(button);
     list.append(item);
   }
@@ -723,13 +753,15 @@ function answer(letter) {
   const q = currentQuestion();
   if (round.answers[q.id]) return; // al beantwoord
 
-  round.answers[q.id] = letter;
-  const correct = letter === q.answer;
+  const chosen = originalLetter(q, letter);
+  round.answers[q.id] = chosen;
+  const correct = chosen === q.answer;
   const first = recordAnswer(q, correct);
 
+  const juist = shownLetter(q, q.answer);
   for (const button of $("options").querySelectorAll("button")) {
     button.disabled = true;
-    if (button.dataset.letter === q.answer) button.classList.add("correct");
+    if (button.dataset.letter === juist) button.classList.add("correct");
     else if (button.dataset.letter === letter) button.classList.add("wrong");
   }
 
@@ -737,7 +769,7 @@ function answer(letter) {
   feedback.hidden = false;
   feedback.classList.add(correct ? "good" : "bad");
   if (!correct) {
-    feedback.textContent = `Fout — het juiste antwoord is ${q.answer}.`;
+    feedback.textContent = `Fout — het juiste antwoord is ${juist}.`;
   } else if (streakOf(q) >= RETIRE_STREAK) {
     feedback.textContent = `Goed! ${RETIRE_STREAK}× op rij — deze vraag is afgerond.`;
   } else if (first) {
@@ -800,9 +832,13 @@ function renderResult() {
       el("p", "tags", q.tags.map((t) => `#${t}`).join(" ")),
       el("p", "question", `${q.id}. ${q.question}`),
       el("p", "label", "Jouw antwoord"),
-      el("p", "given", chosen ? `${chosen}. ${q.options[chosen]}` : "geen antwoord"),
+      el(
+        "p",
+        "given",
+        chosen ? `${shownLetter(q, chosen)}. ${q.options[chosen]}` : "geen antwoord",
+      ),
       el("p", "label", "Juiste antwoord"),
-      el("p", "correct-answer", `${q.answer}. ${q.options[q.answer]}`),
+      el("p", "correct-answer", `${shownLetter(q, q.answer)}. ${q.options[q.answer]}`),
     );
     review.append(card);
   }

@@ -20,6 +20,8 @@ voortgang is wel weg zodra je de server stopt.
 
 - Oefenen per **10 vragen** (standaard), of 5 / 20 / 50 / alles / een eigen aantal.
 - Filteren op onderwerp (de hashtags uit de KNVB-database, bijv. `#buitenspel`).
+- De vier antwoorden staan elke ronde in een andere volgorde, zodat je het antwoord
+  onthoudt en niet de plek.
 - Direct feedback per vraag; aan het eind je score plus alle fout beantwoorde vragen
   met jouw antwoord naast het juiste antwoord.
 - Zelf de mix bepalen tussen nieuwe en eerder geziene vragen: willekeurig (standaard),
