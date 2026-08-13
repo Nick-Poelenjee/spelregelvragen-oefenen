@@ -134,7 +134,9 @@ antwoorden op rij niet meer in een foutenronde verschijnt en na acht helemaal ni
   kleine stap.
 - Voortgang die nog in een browser stond, wordt bij de eerste keer laden eenmalig
   overgezet en opgeteld bij wat er al staat.
-- Is de API niet bereikbaar, dan meldt de app dat en bewaart hij lokaal verder.
+- Is de API niet bereikbaar, dan meldt de app dat, bewaart hij lokaal verder en zet hij
+  elke wijziging in een wachtrij die alsnog wordt verstuurd zodra de server terug is.
+- Terugkomen in het tabblad haalt de laatste stand opnieuw op.
 - `npm run dev` draait de app lokaal met Postgres in het geheugen; `npm test` draait de
   queries tegen diezelfde in-memory Postgres.
 

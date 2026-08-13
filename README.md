@@ -54,8 +54,15 @@ voortgang. De tabellen hebben al een `player_id`, dus echte accounts zijn later 
 kleine stap.
 
 Voortgang die nog in een browser stond (uit de vorige versie) wordt bij de eerste keer
-laden eenmalig overgezet en opgeteld bij wat er al staat. Is de API niet bereikbaar, dan
-meldt de app dat en bewaart hij verder in `localStorage`.
+laden eenmalig overgezet en opgeteld bij wat er al staat.
+
+Valt de API weg, dan meldt de app dat en gaat elke wijziging in een wachtrij in
+`localStorage`. Die wachtrij wordt op volgorde alsnog verstuurd zodra de server terug is
+— tijdens dezelfde sessie of bij een volgende keer laden. Zolang er iets in de wachtrij
+staat, haalt de app géén verse staat op, anders zou de server die antwoorden wegdrukken.
+
+Kom je terug in het tabblad, dan wordt de stand opnieuw opgehaald, zodat voortgang van
+een ander apparaat meteen zichtbaar is.
 
 De verbinding komt uit `DATABASE_URL` (of `POSTGRES_URL`); op Vercel staan die er al.
 
