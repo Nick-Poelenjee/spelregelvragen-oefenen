@@ -20,6 +20,8 @@ voortgang is wel weg zodra je de server stopt.
 
 - Oefenen per **10 vragen** (standaard), of 5 / 20 / 50 / alles / een eigen aantal.
 - Filteren op onderwerp (de hashtags uit de KNVB-database, bijv. `#buitenspel`).
+- De vier antwoorden staan elke ronde in een andere volgorde, zodat je het antwoord
+  onthoudt en niet de plek.
 - Direct feedback per vraag; aan het eind je score plus alle fout beantwoorde vragen
   met jouw antwoord naast het juiste antwoord.
 - Zelf de mix bepalen tussen nieuwe en eerder geziene vragen: willekeurig (standaard),
@@ -65,6 +67,12 @@ Kom je terug in het tabblad, dan wordt de stand opnieuw opgehaald, zodat voortga
 een ander apparaat meteen zichtbaar is.
 
 De verbinding komt uit `DATABASE_URL` (of `POSTGRES_URL`); op Vercel staan die er al.
+
+### Eenmalige bijwerkingen
+
+`sql/beheerst-bijwerken.sql` zet vragen die in het verleden meteen in één keer goed zijn
+beantwoord alsnog op reeks 6, de startstand die nieuwe vragen sinds de regelwijziging
+krijgen. Draaien in de SQL-editor van Neon of via `psql "$DATABASE_URL"`.
 
 ## Vragen bijwerken
 
